@@ -1,0 +1,35 @@
+## Interface: 110207
+## Title: QuickCrafts
+## Notes: Calculates various crafting profits using Auctionator prices. Type /calc to open.
+## Author: Penguinr2gt
+## Version: 0.0.3
+## Dependencies: Auctionator
+## SavedVariables: QuickCraftsDB
+
+# Constants
+Constants.lua
+
+Locals/enUS.lua
+Locals/ruRU.lua
+
+Localization.lua
+
+# Config and data
+Config.lua
+Recipes.lua
+Pigments.lua
+Dyes.lua
+
+# Core systems 
+PriceSource.lua
+Calculator.lua
+PigmentCalculator.lua
+
+# UI components 
+UI/MainFrame.lua
+UI/TransmutesView.lua
+UI/DetailView.lua
+UI/PigmentsView.lua
+UI/PigmentDetailView.lua
+
+Core.lua
