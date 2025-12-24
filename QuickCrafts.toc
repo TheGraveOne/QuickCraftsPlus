@@ -9,8 +9,18 @@
 # Constants
 Constants.lua
 
+# Languages for Localization
 Locals/enUS.lua
 Locals/ruRU.lua
+Locals/deDE.lua
+Locals/esES.lua
+Locals/esMX.lua
+Locals/frFR.lua
+Locals/itIT.lua
+Locals/koKR.lua
+Locals/ptBR.lua
+Locals/zhCN.lua
+Locals/zhTW.lua
 
 Localization.lua
 
