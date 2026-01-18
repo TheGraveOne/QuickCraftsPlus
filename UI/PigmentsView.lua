@@ -55,33 +55,212 @@ refreshBtn:SetScript("OnLeave", function()
 end)
 
 --============================================================================
--- COLUMN HEADERS
+-- COLUMN HEADERS (Clickable for sorting)
 --============================================================================
 
 local headerFrame = CreateFrame("Frame", nil, PigmentsFrame)
-headerFrame:SetSize(490, 20)
+headerFrame:SetSize(490, 22)
 headerFrame:SetPoint("TOP", optionsFrame, "BOTTOM", 0, -5)
 
-local headerName = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-headerName:SetPoint("LEFT", 50, 0)
-headerName:SetText("|cFFAAAACC" .. L(TEXT.HEADER_PIGMENT) .. "|r")
+-- Helper function to create clickable header button (styled like Refresh button)
+local function CreateHeaderButton(parent, xPos, text, column)
+    local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    btn:SetHeight(22)
+    btn:SetPoint("LEFT", xPos, 0)
+    btn:RegisterForClicks("LeftButtonUp")
+    
+    -- Get the button's text fontstring
+    local btnText = btn:GetFontString()
+    if not btnText then
+        btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        btn:SetFontString(btnText)
+    end
+    btn.text = btnText
+    btn.text:SetPoint("CENTER", 0, 0)
+    btn.text:SetText(text)
+    
+    -- Auto-size width based on text (with some padding)
+    btn:SetWidth(btn.text:GetStringWidth() + 20)
+    
+    btn.column = column
+    
+    -- Make sure button can receive clicks
+    btn:SetMovable(false)
+    btn:SetFrameLevel(headerFrame:GetFrameLevel() + 10)
+    
+    -- Hover effect - button template handles background highlight
+    btn:SetScript("OnEnter", function(self)
+        -- Button template handles this
+    end)
+    
+    btn:SetScript("OnLeave", function(self)
+        -- Update will be handled by UpdateHeaderIndicators
+    end)
+    
+    return btn
+end
 
-local headerHerb = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-headerHerb:SetPoint("LEFT", 155, 0)
-headerHerb:SetText("|cFFAAAACC" .. L(TEXT.HEADER_CHEAPEST_HERB) .. "|r")
-
-local headerDye = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-headerDye:SetPoint("LEFT", 305, 0)
-headerDye:SetText("|cFFAAAACC" .. L(TEXT.HEADER_BEST_DYE) .. "|r")
-
-local headerProfit = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-headerProfit:SetPoint("LEFT", 435, 0)
-headerProfit:SetText("|cFFAAAACC" .. L(TEXT.HEADER_PROFIT) .. "|r")
+-- Create clickable header buttons aligned with column positions
+-- Align with row data: name starts at 42, herb at 148, dye at 300, profit at 430
+local headerName = CreateHeaderButton(headerFrame, 42, L(TEXT.HEADER_PIGMENT), "name")
+local headerHerb = CreateHeaderButton(headerFrame, 148, L(TEXT.HEADER_CHEAPEST_HERB), "herb")
+local headerDye = CreateHeaderButton(headerFrame, 300, L(TEXT.HEADER_BEST_DYE), "dye")
+local headerProfit = CreateHeaderButton(headerFrame, 430, L(TEXT.HEADER_PROFIT), "profit")
 
 local headerSep = PigmentsFrame:CreateTexture(nil, "ARTWORK")
 headerSep:SetColorTexture(0.5, 0.5, 0.5, 0.5)
 headerSep:SetSize(480, 1)
 headerSep:SetPoint("TOP", headerFrame, "BOTTOM", 0, -2)
+
+--============================================================================
+-- SORTING FUNCTIONS
+--============================================================================
+
+-- Update header visual indicators (arrows and colors)
+local function UpdateHeaderIndicators()
+    local sortColumn = addon:GetSetting("pigmentSortColumn")
+    local sortDirection = addon:GetSetting("pigmentSortDirection")
+    
+    local headers = {
+        name = headerName,
+        herb = headerHerb,
+        dye = headerDye,
+        profit = headerProfit,
+    }
+    
+    -- Sort direction indicators: use simple symbols
+    local sortIndicator = (sortDirection == "desc") and " -" or " +"
+    
+    -- Map column names to TEXT constants
+    local textMap = {
+        name = TEXT.HEADER_PIGMENT,
+        herb = TEXT.HEADER_CHEAPEST_HERB,
+        dye = TEXT.HEADER_BEST_DYE,
+        profit = TEXT.HEADER_PROFIT,
+    }
+    
+    for col, header in pairs(headers) do
+        local baseText = L(textMap[col])
+        
+        if sortColumn == col then
+            header.text:SetText(baseText .. sortIndicator)
+            header.text:SetTextColor(1, 0.82, 0) -- Gold for active
+            -- Auto-resize button when text changes
+            header:SetWidth(header.text:GetStringWidth() + 20)
+        else
+            header.text:SetText(baseText)
+            header.text:SetTextColor(0.9, 0.9, 0.9) -- Light gray for inactive (button style)
+            -- Auto-resize button when text changes
+            header:SetWidth(header.text:GetStringWidth() + 20)
+        end
+    end
+end
+
+-- Sort pigments by the current sort settings
+local function GetSortedPigments()
+    local pigments = {}
+    
+    -- Build table with all pigment data
+    for _, pigment in ipairs(addon.Pigments) do
+        local data = addon.pigmentData[pigment.id]
+        if data then
+            table.insert(pigments, {
+                pigment = pigment,
+                data = data,
+            })
+        end
+    end
+    
+    -- Get sort settings
+    local sortColumn = addon:GetSetting("pigmentSortColumn")
+    local sortDirection = addon:GetSetting("pigmentSortDirection")
+    local isDesc = (sortDirection == "desc")
+    
+    -- Sort function
+    table.sort(pigments, function(a, b)
+        local aVal, bVal
+        
+        if sortColumn == "name" then
+            aVal = a.pigment.name or ""
+            bVal = b.pigment.name or ""
+        elseif sortColumn == "herb" then
+            -- Sort by cheapest herb price
+            aVal = (a.data.cheapestHerb and a.data.cheapestHerb.price) or -999999999
+            bVal = (b.data.cheapestHerb and b.data.cheapestHerb.price) or -999999999
+        elseif sortColumn == "dye" then
+            -- Sort by best dye price
+            aVal = (a.data.bestDye and a.data.bestDye.price) or -999999999
+            bVal = (b.data.bestDye and b.data.bestDye.price) or -999999999
+        elseif sortColumn == "profit" then
+            -- Sort by dye profit if available, otherwise pigment profit
+            aVal = (a.data.dyeProfit or a.data.profit) or -999999999
+            bVal = (b.data.dyeProfit or b.data.profit) or -999999999
+        else
+            -- Default to profit if unknown
+            aVal = (a.data.dyeProfit or a.data.profit) or -999999999
+            bVal = (b.data.dyeProfit or b.data.profit) or -999999999
+        end
+        
+        if isDesc then
+            return aVal > bVal
+        else
+            return aVal < bVal
+        end
+    end)
+    
+    return pigments
+end
+
+-- Handle header click to change sort
+local function OnHeaderClick(column)
+    local currentColumn = addon:GetSetting("pigmentSortColumn")
+    local currentDirection = addon:GetSetting("pigmentSortDirection")
+    
+    if currentColumn == column then
+        -- Toggle direction if clicking same column
+        local newDirection = (currentDirection == "desc") and "asc" or "desc"
+        addon:SetSetting("pigmentSortDirection", newDirection)
+    else
+        -- Set new column and default to desc
+        addon:SetSetting("pigmentSortColumn", column)
+        addon:SetSetting("pigmentSortDirection", "desc")
+    end
+    
+    -- Force recalculation and refresh view - use the function reference directly
+    if addon.PigmentCalculator and addon.PigmentCalculator.CalculateAllPigments then
+        addon.PigmentCalculator:CalculateAllPigments()
+    end
+    -- Call UpdatePigmentsView after it's defined (it will be in scope when clicked)
+end
+
+-- Store OnHeaderClick for later use after UpdatePigmentsView is defined
+local function SetupHeaderClickHandlers()
+    local function RefreshView()
+        if addon.UI.UpdatePigmentsView then
+            addon.UI.UpdatePigmentsView()
+        end
+    end
+    
+    headerName:SetScript("OnClick", function(self, button)
+        OnHeaderClick("name")
+        RefreshView()
+    end)
+    headerHerb:SetScript("OnClick", function(self, button)
+        OnHeaderClick("herb")
+        RefreshView()
+    end)
+    headerDye:SetScript("OnClick", function(self, button)
+        OnHeaderClick("dye")
+        RefreshView()
+    end)
+    headerProfit:SetScript("OnClick", function(self, button)
+        OnHeaderClick("profit")
+        RefreshView()
+    end)
+end
+
+-- Set up click handlers after buttons are created
+SetupHeaderClickHandlers()
 
 --============================================================================
 -- SCROLL FRAME FOR PIGMENT ROWS
@@ -284,12 +463,22 @@ local function UpdatePigmentsView()
     -- Calculate all pigments
     addon.PigmentCalculator:CalculateAllPigments()
     
-    -- Update each row
-    for _, pigment in ipairs(addon.Pigments) do
+    -- Get sorted pigments
+    local sortedPigments = GetSortedPigments()
+    
+    -- Update header indicators
+    UpdateHeaderIndicators()
+    
+    -- Update each row based on sorted order
+    for index, item in ipairs(sortedPigments) do
+        local pigment = item.pigment
+        local data = item.data
         local row = pigmentRows[pigment.id]
-        local data = addon.pigmentData[pigment.id]
         
         if row and data then
+            -- Reposition row based on sort order
+            row:ClearAllPoints()
+            row:SetPoint("TOP", scrollContent, "TOP", 0, -((index - 1) * 42))
             -- Update pigment icon
             row.icon:SetTexture(addon.PriceSource:GetItemIcon(pigment.itemID))
             
@@ -337,6 +526,10 @@ local function UpdatePigmentsView()
         end
     end
     
+    -- Update scroll content height
+    local totalHeight = #sortedPigments * 42
+    scrollContent:SetHeight(math.max(totalHeight, 1))
+    
     statusText:SetText(string.format(L(TEXT.STATUS_UPDATED), date("%H:%M:%S")))
 end
 
@@ -374,6 +567,8 @@ initFrame:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_ENTERING_WORLD" then
         C_Timer.After(2.5, function()
             InitializePigmentRows()
+            -- Initialize header indicators on load
+            UpdateHeaderIndicators()
         end)
         self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     end

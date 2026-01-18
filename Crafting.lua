@@ -15,7 +15,14 @@ local addonName, addon = ...
 addon.Crafting = addon.Crafting or {}
 
 local function qcPrint(msg)
-    print("|cFF00CCFFQuickCrafts|r: " .. tostring(msg))
+    print("|cFF00CCFFQuickCraftsPlus|r: " .. tostring(msg))
+end
+
+-- Debug logging (disabled by default). Toggle with: /run QuickCraftsPlusDB.debug=true
+local function qcDebug(...)
+    if _G.QuickCraftsPlusDB and _G.QuickCraftsPlusDB.debug then
+        print(...)
+    end
 end
 
 local function isTradeSkillReady()
@@ -91,8 +98,11 @@ function addon.Crafting:FindRecipeIDByOutputItemID(outputItemID)
 
     for _, recipeID in ipairs(all) do
         local out = C_TradeSkillUI.GetRecipeOutputItemData(recipeID)
-        if out and out.hyperlink then
-            local outItemID = getItemIDFromLink(out.hyperlink)
+        if out then
+            -- Depending on the recipe type, output data may include:
+            --  * out.itemID (preferred)
+            --  * out.hyperlink (fallback)
+            local outItemID = tonumber(out.itemID) or getItemIDFromLink(out.hyperlink)
             if outItemID == outputItemID then
                 self._outputToRecipeID[outputItemID] = recipeID
                 return recipeID
@@ -159,11 +169,25 @@ function addon.Crafting:OpenRecipe(spec)
 end
 
 function addon.Crafting:Craft(spec, quantity)
-    if not self:EnsureReadyOrWarn() then return false end
+    qcDebug(
+        "QC Craft called",
+        "quantity=", quantity,
+        "specItem=", spec and (spec.recipeID or spec.itemID or (spec.product and spec.product.itemID)) or "nil"
+    )
+
+    if not self:EnsureReadyOrWarn() then
+        qcDebug("QC Craft aborted: EnsureReadyOrWarn failed")
+        return false
+    end
+
     quantity = tonumber(quantity) or 1
     if quantity < 1 then quantity = 1 end
 
+    qcDebug("QC Craft normalized quantity=", quantity)
+
     local recipeID = self:ResolveRecipeID(spec)
+    qcDebug("QC Craft resolved recipeID=", recipeID)
+
     if not recipeID then
         qcPrint("Couldn't find that recipe in the currently open profession window.")
         return false
@@ -172,13 +196,18 @@ function addon.Crafting:Craft(spec, quantity)
     -- Select first so the player sees what's being crafted.
     self:SelectRecipeID(recipeID)
 
+    qcDebug("QC Craft calling C_TradeSkillUI.CraftRecipe", recipeID, quantity)
+
     local ok, err = pcall(function()
         C_TradeSkillUI.CraftRecipe(recipeID, quantity)
     end)
     if not ok then
         qcPrint("Craft failed: " .. tostring(err))
+        qcDebug("QC Craft pcall error:", err)
         return false
     end
+
+    qcDebug("QC Craft success")
     return true
 end
 
@@ -186,9 +215,8 @@ end
 -- Craft X popup
 --============================================================================
 
-addon.Crafting._pendingSpec = nil
-
 if not StaticPopupDialogs then
+    qcPrint("StaticPopupDialogs not available.")
     return
 end
 
@@ -199,21 +227,89 @@ StaticPopupDialogs["QUICKCRAFTS_CRAFT_X"] = {
     hasEditBox = true,
     editBoxWidth = 64,
     maxLetters = 4,
+
     OnShow = function(self)
-        self.editBox:SetText("1")
-        self.editBox:HighlightText()
-    end,
-    OnAccept = function(self)
-        local qty = tonumber(self.editBox:GetText())
-        local spec = addon.Crafting._pendingSpec
-        addon.Crafting._pendingSpec = nil
-        if spec and qty and qty > 0 then
-            addon.Crafting:Craft(spec, math.floor(qty))
+        -- StaticPopup handlers can be invoked with `self` not being the dialog frame on some clients.
+        -- Prefer the visible dialog for our popup "which".
+        local dialog = (StaticPopup_FindVisible and StaticPopup_FindVisible("QUICKCRAFTS_CRAFT_X")) or self
+        if dialog and not dialog.editBox and dialog.GetParent then
+            dialog = dialog:GetParent()
         end
+
+        -- Find the edit box robustly.
+        local eb = (dialog and dialog.editBox)
+        if not eb and dialog and dialog.GetName then
+            eb = _G[dialog:GetName() .. "EditBox"]
+        end
+        if not eb then
+            -- Fallback: scan common StaticPopup frames.
+            for i = 1, 4 do
+                local frame = _G["StaticPopup" .. i]
+                local edit = _G["StaticPopup" .. i .. "EditBox"]
+                if frame and frame.which == "QUICKCRAFTS_CRAFT_X" and edit then
+                    dialog = frame
+                    eb = edit
+                    break
+                end
+            end
+        end
+
+        if not eb then
+            qcDebug("QC OnShow: could not find edit box")
+            return
+        end
+
+        eb:SetText("1")
+        eb:HighlightText()
+        eb:SetFocus()
     end,
-    OnCancel = function()
-        addon.Crafting._pendingSpec = nil
+
+    OnAccept = function(self, data)
+        local dialog = (StaticPopup_FindVisible and StaticPopup_FindVisible("QUICKCRAFTS_CRAFT_X")) or self
+        if dialog and not dialog.editBox and dialog.GetParent then
+            dialog = dialog:GetParent()
+        end
+
+        -- Find edit box robustly.
+        local eb = (dialog and dialog.editBox)
+        if not eb and dialog and dialog.GetName then
+            eb = _G[dialog:GetName() .. "EditBox"]
+        end
+        if not eb then
+            for i = 1, 4 do
+                local frame = _G["StaticPopup" .. i]
+                local edit = _G["StaticPopup" .. i .. "EditBox"]
+                if frame and frame.which == "QUICKCRAFTS_CRAFT_X" and edit then
+                    dialog = frame
+                    eb = edit
+                    break
+                end
+            end
+        end
+
+        local qtyText = eb and eb:GetText() or ""
+        local qty = tonumber(qtyText)
+        local spec = data
+
+        qcDebug("QC OnAccept fired", "qtyText=", tostring(qtyText), "qty=", qty, "hasData=", spec and "yes" or "no")
+
+        if not (qty and qty > 0) then
+            qcDebug("QC OnAccept: invalid qty")
+            return
+        end
+        if not spec then
+            qcDebug("QC OnAccept: spec is nil (popup data missing)")
+            return
+        end
+
+        qcDebug("QC OnAccept: calling Craft() now")
+        addon.Crafting:Craft(spec, math.floor(qty))
     end,
+
+    EditBoxOnEnterPressed = function(self)
+        self:GetParent().button1:Click()
+    end,
+
     timeout = 0,
     whileDead = true,
     hideOnEscape = true,
@@ -221,6 +317,8 @@ StaticPopupDialogs["QUICKCRAFTS_CRAFT_X"] = {
 }
 
 function addon.Crafting:PromptCraftX(spec)
-    self._pendingSpec = spec
-    StaticPopup_Show("QUICKCRAFTS_CRAFT_X")
+    qcDebug("QC PromptCraftX called. spec=", spec and "yes" or "no")
+
+    local dialog = StaticPopup_Show("QUICKCRAFTS_CRAFT_X", nil, nil, spec)
+    qcDebug("QC PromptCraftX StaticPopup_Show returned", dialog and "dialog" or "nil")
 end

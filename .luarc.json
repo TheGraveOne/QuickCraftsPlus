@@ -1,0 +1,28 @@
+{
+  "runtime": {
+    "version": "LuaJIT"
+  },
+  "workspace": {
+    "library": [],
+    "checkThirdParty": false
+  },
+  "diagnostics": {
+    "globals": [
+      "CreateFrame",
+      "GameTooltip",
+      "UIParent",
+      "C_Timer",
+      "C_Item",
+      "C_TradeSkillUI",
+      "Auctionator",
+      "GetLocale",
+      "GetItemCount",
+      "StaticPopupDialogs",
+      "StaticPopup_Show",
+      "StaticPopup_FindVisible",
+      "Item",
+      "AddonCompartmentFrame",
+      "GetMouseFocus"
+    ]
+  }
+}

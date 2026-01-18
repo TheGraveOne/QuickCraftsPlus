@@ -13,7 +13,7 @@ local TEXT = addon.CONST.TEXT
 
 local MainFrame = CreateFrame("Frame", "QuickCraftsFrame", UIParent, "BackdropTemplate")
 MainFrame:SetFrameStrata("HIGH") -- setting frame to high to show above other panels
-MainFrame:SetSize(530, 500)
+MainFrame:SetSize(530, 520)
 MainFrame:SetPoint("CENTER")
 MainFrame:SetMovable(true)
 MainFrame:EnableMouse(true)

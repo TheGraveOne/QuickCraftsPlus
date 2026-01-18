@@ -5,7 +5,7 @@
 local addonName, addon = ...
 
 addon.name = addonName
-addon.version = "0.0.2"
+addon.version = "v0.1.1"
 
 -- Initialize localization system
 addon.LOCAL:Init()
@@ -34,7 +34,14 @@ addon.defaults = {
     buyPigments = false,    -- Buy Pigments or Craft Pigments with Herbs (Player Housing Dyes)
     history = {},           -- Price history
     windowPosition = nil,   
-    lastTab = "pigments", 
+    lastTab = "pigments",
+    debug = false,
+    -- Sorting settings for TransmutesView
+    sortColumn = "profit",  -- Column to sort by: "name", "cost", "sell", "profit"
+    sortDirection = "desc", -- Sort direction: "asc" or "desc"
+    -- Sorting settings for PigmentsView
+    pigmentSortColumn = "profit",  -- Column to sort by: "name", "herb", "dye", "profit"
+    pigmentSortDirection = "desc", -- Sort direction: "asc" or "desc"
 }
 
 --============================================================================
@@ -43,32 +50,46 @@ addon.defaults = {
 
 -- Initialize saved variables with defaults
 function addon:InitializeDB()
-    if not QuickCraftsDB then
-        QuickCraftsDB = {}
+    if not QuickCraftsPlusDB then
+        QuickCraftsPlusDB = {}
     end
     
     -- Fill in any missing defaults
     for key, value in pairs(self.defaults) do
-        if QuickCraftsDB[key] == nil then
-            QuickCraftsDB[key] = value
+        if QuickCraftsPlusDB[key] == nil then
+            QuickCraftsPlusDB[key] = value
         end
+    end
+    
+    -- Ensure sort settings exist (migration for existing users)
+    if not QuickCraftsPlusDB.sortColumn then
+        QuickCraftsPlusDB.sortColumn = "profit"
+    end
+    if not QuickCraftsPlusDB.sortDirection then
+        QuickCraftsPlusDB.sortDirection = "desc"
+    end
+    if not QuickCraftsPlusDB.pigmentSortColumn then
+        QuickCraftsPlusDB.pigmentSortColumn = "profit"
+    end
+    if not QuickCraftsPlusDB.pigmentSortDirection then
+        QuickCraftsPlusDB.pigmentSortDirection = "desc"
     end
 end
 
 -- Get a setting value
 function addon:GetSetting(key)
-    if QuickCraftsDB and QuickCraftsDB[key] ~= nil then
-        return QuickCraftsDB[key]
+    if QuickCraftsPlusDB and QuickCraftsPlusDB[key] ~= nil then
+        return QuickCraftsPlusDB[key]
     end
     return self.defaults[key]
 end
 
 -- Set a setting value
 function addon:SetSetting(key, value)
-    if not QuickCraftsDB then
-        QuickCraftsDB = {}
+    if not QuickCraftsPlusDB then
+        QuickCraftsPlusDB = {}
     end
-    QuickCraftsDB[key] = value
+    QuickCraftsPlusDB[key] = value
 end
 
 -- Toggle a boolean setting

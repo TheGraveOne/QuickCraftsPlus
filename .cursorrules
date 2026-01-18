@@ -1,0 +1,22 @@
+# WoW AddOn Development Rules
+
+This project is a World of Warcraft addon written in Lua.
+
+## Common WoW API Functions
+- `CreateFrame()` - Creates UI frames
+- `C_Item.GetItemInfo()` - Gets item information
+- `C_TradeSkillUI` - Trade skill/Profession API
+- `Auctionator.API.v1` - Auctionator addon API for prices
+- `GameTooltip` - Tooltip management
+- `C_Timer.After()` - Delayed function execution
+
+## Coding Style
+- Use descriptive variable names
+- Add comments for complex logic
+- Follow WoW addon naming conventions
+
+## Common Patterns
+- Frames use `CreateFrame()` with optional templates
+- Event handlers use `:SetScript("OnEvent", function(self, event, ...) end)`
+- Localization uses `L(TEXT.KEY)` pattern
+- Settings stored in saved variables via `addon:GetSetting()` / `addon:SetSetting()`
