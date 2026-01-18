@@ -182,5 +182,14 @@ return {
         --====================================================================
         
         [TEXT.EACH_ABBREV] = "each",
+        
+        --====================================================================
+        -- INVENTORY DISPLAY
+        --====================================================================
+        
+        [TEXT.INVENTORY_COUNT] = "%d/%d",
+        [TEXT.CAN_CRAFT] = "%d (can craft %d)",
+        [TEXT.INSUFFICIENT_MATERIALS] = "Insufficient",
+        [TEXT.NONE_MATERIALS] = "None",
     }
 end

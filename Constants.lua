@@ -120,6 +120,12 @@ addon.CONST.TEXT = {
 
     -- Misc UI Elements
     EACH_ABBREV = "EACH_ABBREV",
+    
+    -- Inventory Display
+    INVENTORY_COUNT = "INVENTORY_COUNT",
+    CAN_CRAFT = "CAN_CRAFT",
+    INSUFFICIENT_MATERIALS = "INSUFFICIENT_MATERIALS",
+    NONE_MATERIALS = "NONE_MATERIALS",
 }
 
 --============================================================================

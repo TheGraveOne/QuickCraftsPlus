@@ -245,11 +245,25 @@ local function UpdateDetailView()
         row.icon:SetTexture(addon.PriceSource:GetItemIcon(mat.itemID))
         row.icon:Show()
         
-        -- Position and show name with item link
+        -- Position and show name with item link and inventory count
         row.name:ClearAllPoints()
         row.name:SetPoint("TOPLEFT", detailContent, "TOPLEFT", 55, yOffset - 3)
         local itemDisplay = addon.PriceSource:GetItemDisplayText(mat.itemID, mat.name)
-        row.name:SetText(string.format("%dx %s", mat.amount, itemDisplay))
+        
+        -- Get inventory count for this material
+        local matOwned = addon.Calculator:GetItemCount(mat.itemID, true)
+        local matText = string.format("%dx %s", mat.amount, itemDisplay)
+        
+        -- Add inventory count after material name: " - 45" or " - None" (red)
+        if matOwned > 0 then
+            matText = matText .. " |cFF888888- |cFFFFFFFF" .. matOwned .. "|r"
+        else
+            local L = addon.L
+            local TEXT = addon.CONST.TEXT
+            matText = matText .. " |cFF888888- |cFFFF0000" .. L(TEXT.INSUFFICIENT_MATERIALS) .. "|r"
+        end
+        
+        row.name:SetText(matText)
         row.name:Show()
         
         -- Position and show price

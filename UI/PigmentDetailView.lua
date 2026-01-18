@@ -287,8 +287,18 @@ local function UpdatePigmentDetailView()
     
     local pigment = data.pigment
     
-    -- Update title with item link
-    detailTitle:SetText(addon.PriceSource:GetItemDisplayText(pigment.itemID, pigment.name))
+    -- Update title with item link and inventory count
+    local pigmentDisplayText = addon.PriceSource:GetItemDisplayText(pigment.itemID, pigment.name)
+    local pigmentOwned = addon.Calculator:GetItemCount(pigment.itemID, true)
+    -- Add count inline after the name with " - " separator
+    if pigmentOwned > 0 then
+        detailTitle:SetText(pigmentDisplayText .. " |cFF888888- |cFFFFFFFF" .. pigmentOwned .. "|r")
+    else
+        -- Show "None" in red when no pigments owned
+        local L = addon.L
+        local TEXT = addon.CONST.TEXT
+        detailTitle:SetText(pigmentDisplayText .. " |cFF888888- |cFFFF0000" .. L(TEXT.NONE_MATERIALS) .. "|r")
+    end
     
     -- Hide all existing dye rows
     for _, row in pairs(dyeRows) do
@@ -394,7 +404,14 @@ local function UpdatePigmentDetailView()
             
             row.icon:SetTexture(addon.PriceSource:GetItemIcon(dye.itemID))
             -- Use item link for hover tooltips
-            row.name:SetText(addon.PriceSource:GetItemDisplayText(dye.itemID, dye.name))
+            local dyeDisplayText = addon.PriceSource:GetItemDisplayText(dye.itemID, dye.name)
+            local dyeOwned = addon.Calculator:GetItemCount(dye.itemID, true)
+            -- Add count inline after the name with " - " separator
+            if dyeOwned > 0 then
+                row.name:SetText(dyeDisplayText .. " |cFF888888- |cFFFFFFFF" .. dyeOwned .. "|r")
+            else
+                row.name:SetText(dyeDisplayText)
+            end
             
             -- Calculates price text that is shown
             if price then

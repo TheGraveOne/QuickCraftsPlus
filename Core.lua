@@ -37,6 +37,8 @@ local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("PLAYER_LOGOUT")
+eventFrame:RegisterEvent("BAG_UPDATE")
+eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
 
 eventFrame:SetScript("OnEvent", function(self, event, arg1)
     
@@ -79,6 +81,32 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
     end
     
     if event == "PLAYER_LOGOUT" then
+    end
+    
+    -- Inventory update events - refresh views if they're visible
+    if event == "BAG_UPDATE" or event == "UNIT_INVENTORY_CHANGED" then
+        -- Delay slightly to batch multiple updates
+        C_Timer.After(0.1, function()
+            if addon.UI and addon.UI.currentTab then
+                if addon.UI.currentTab == "pigments" then
+                    if addon.UI.UpdatePigmentsView then
+                        addon.UI.UpdatePigmentsView()
+                    end
+                    -- Also refresh detail view if it's open
+                    if addon.UI.PigmentDetailFrame and addon.UI.PigmentDetailFrame:IsShown() and addon.UI.UpdatePigmentDetailView then
+                        addon.UI.UpdatePigmentDetailView()
+                    end
+                elseif addon.UI.currentTab == "transmutes" then
+                    if addon.UI.UpdateTransmutesView then
+                        addon.UI.UpdateTransmutesView()
+                    end
+                    -- Also refresh detail view if it's open
+                    if addon.UI.DetailFrame and addon.UI.DetailFrame:IsShown() and addon.UI.UpdateDetailView then
+                        addon.UI.UpdateDetailView()
+                    end
+                end
+            end
+        end)
     end
 end)
 

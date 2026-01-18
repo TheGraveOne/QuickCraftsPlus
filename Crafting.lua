@@ -208,6 +208,28 @@ function addon.Crafting:Craft(spec, quantity)
     end
 
     qcDebug("QC Craft success")
+    
+    -- Refresh UI after a short delay to allow inventory to update
+    C_Timer.After(0.3, function()
+        if addon.UI and addon.UI.currentTab then
+            if addon.UI.currentTab == "pigments" then
+                if addon.UI.UpdatePigmentsView then
+                    addon.UI.UpdatePigmentsView()
+                end
+                if addon.UI.UpdatePigmentDetailView then
+                    addon.UI.UpdatePigmentDetailView()
+                end
+            elseif addon.UI.currentTab == "transmutes" then
+                if addon.UI.UpdateTransmutesView then
+                    addon.UI.UpdateTransmutesView()
+                end
+                if addon.UI.UpdateDetailView then
+                    addon.UI.UpdateDetailView()
+                end
+            end
+        end
+    end)
+    
     return true
 end
 

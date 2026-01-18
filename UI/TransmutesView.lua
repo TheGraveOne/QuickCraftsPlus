@@ -295,6 +295,14 @@ local function CreateRecipeRow(index, recipe)
     row.nameText:SetJustifyH("LEFT")
     row.nameText:SetText(recipe.name)
     
+    -- Inventory count (materials and craftable)
+    row.inventoryText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.inventoryText:SetPoint("LEFT", 50, -12)
+    row.inventoryText:SetWidth(140)
+    row.inventoryText:SetJustifyH("LEFT")
+    row.inventoryText:SetTextColor(0.7, 0.7, 0.7)
+    row.inventoryText:SetText("")
+    
     -- Cost
     row.costText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.costText:SetPoint("LEFT", 200, 0)
@@ -460,6 +468,12 @@ local function UpdateTransmutesView()
             
             -- Update icon
             row.icon:SetTexture(addon.PriceSource:GetItemIcon(recipe.product.itemID))
+            
+            -- Update inventory count (materials and craftable)
+            local craftableCount, _, _, hasEnough = addon.Calculator:GetCraftableCount(recipe.materials, true)
+            
+            -- Show craftable count: "can craft 4" format (or "Insufficient")
+            row.inventoryText:SetText(addon.Calculator:FormatInventoryCount(nil, nil, craftableCount))
             
             -- Update cost (show effective cost if mastery enabled)
             if data.hasAllPrices then

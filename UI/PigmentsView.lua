@@ -304,6 +304,14 @@ local function CreatePigmentRow(index, pigment)
     local shortName = pigment.name:gsub(" Dye Pigment", "")
     row.nameText:SetText(shortName)
     
+    -- Pigment inventory count
+    row.inventoryText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.inventoryText:SetPoint("LEFT", 42, -12)
+    row.inventoryText:SetWidth(100)
+    row.inventoryText:SetJustifyH("LEFT")
+    row.inventoryText:SetTextColor(0.7, 0.7, 0.7)
+    row.inventoryText:SetText("")
+    
     -- Cheapest herb icon
     row.herbIcon = row:CreateTexture(nil, "ARTWORK")
     row.herbIcon:SetSize(20, 20)
@@ -482,6 +490,21 @@ local function UpdatePigmentsView()
             -- Update pigment icon
             row.icon:SetTexture(addon.PriceSource:GetItemIcon(pigment.itemID))
             
+            -- Update pigment inventory count
+            local pigmentOwned = addon.Calculator:GetItemCount(pigment.itemID, true)
+            local herbRequired = pigment.herbCost or 10
+            local herbOwned = 0
+            local craftableFromHerbs = 0
+            
+            -- Calculate craftable from herbs (using cheapest herb if available)
+            if data.cheapestHerb then
+                herbOwned = addon.Calculator:GetItemCount(data.cheapestHerb.itemID, true)
+                craftableFromHerbs = math.floor(herbOwned / herbRequired)
+            end
+            
+            -- Show inventory count: "45 (can craft 4)" format (use "None" for pigments instead of "Insufficient")
+            row.inventoryText:SetText(addon.Calculator:FormatInventoryCount(pigmentOwned, nil, craftableFromHerbs, true))
+            
             -- Update cheapest herb info
             if data.cheapestHerb then
                 row.herbIcon:SetTexture(addon.PriceSource:GetItemIcon(data.cheapestHerb.itemID))
@@ -492,7 +515,14 @@ local function UpdatePigmentsView()
                     herbName = herbName:sub(1, 11) .. "..."
                 end
                 row.herbText:SetText(herbName)
-                row.herbPriceText:SetText(addon.Calculator:FormatGoldCompact(data.cheapestHerb.price) .. " " .. L(TEXT.EACH_ABBREV))
+                -- Show herb inventory count and price
+                local herbCount = addon.Calculator:GetItemCount(data.cheapestHerb.itemID, true)
+                local herbPriceText = addon.Calculator:FormatGoldCompact(data.cheapestHerb.price) .. " " .. L(TEXT.EACH_ABBREV)
+                if herbCount > 0 then
+                    row.herbPriceText:SetText(string.format("|cFFFFFFFF%d|r |cFF888888- %s|r", herbCount, herbPriceText))
+                else
+                    row.herbPriceText:SetText(herbPriceText)
+                end
             else
                 row.herbIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
                 row.herbText:SetText("|cFFFF0000" .. L(TEXT.STATUS_NO_PRICES) .. "|r")

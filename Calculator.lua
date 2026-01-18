@@ -59,6 +59,83 @@ function addon.Calculator:FormatProfit(copper)
     end
 end
 
+--============================================================================
+-- INVENTORY HELPER FUNCTIONS
+--============================================================================
+
+-- Get item count (including bank if includeBank is true)
+function addon.Calculator:GetItemCount(itemID, includeBank)
+    if not itemID then return 0 end
+    return GetItemCount(itemID, includeBank) or 0
+end
+
+-- Calculate how many items can be crafted given materials
+-- Returns: ownedCount, requiredCount, craftableCount, hasEnough
+function addon.Calculator:GetCraftableCount(materials, includeBank)
+    includeBank = includeBank ~= false -- default to true
+    local ownedCount = math.huge
+    local requiredCount = 0
+    
+    for _, mat in ipairs(materials or {}) do
+        local matOwned = self:GetItemCount(mat.itemID, includeBank)
+        local matRequired = mat.amount or 1
+        requiredCount = requiredCount + matRequired
+        
+        local possible = math.floor(matOwned / matRequired)
+        if possible < ownedCount then
+            ownedCount = possible
+        end
+    end
+    
+    if ownedCount == math.huge then
+        ownedCount = 0
+    end
+    
+    local hasEnough = ownedCount > 0
+    
+    return ownedCount, requiredCount, ownedCount, hasEnough
+end
+
+-- Format inventory count display
+-- Format: "45/10" or "45 (can craft 4)" or "Insufficient"/"None"
+-- owned: number of items owned (for pigments/products)
+-- required: required amount (for "45/10" format)
+-- craftable: number that can be crafted (for "can craft X" format)
+-- useNone: if true, use "None" instead of "Insufficient" (for pigments)
+function addon.Calculator:FormatInventoryCount(owned, required, craftable, useNone)
+    local L = addon.L
+    local TEXT = addon.CONST.TEXT
+    
+    -- If we have craftable info, show "can craft X" format
+    if craftable and craftable > 0 then
+        if owned and owned > 0 then
+            -- Show both owned and craftable: "45 (can craft 4)"
+            return string.format("|cFFFFFFFF%d|r |cFF888888(can craft %d)|r", owned, craftable)
+        else
+            -- Show only craftable: "can craft 4"
+            return string.format("|cFF888888(can craft %d)|r", craftable)
+        end
+    end
+    
+    -- If we have required amount, show "45/10" format
+    if required and required > 0 then
+        if owned and owned > 0 then
+            return string.format("|cFFFFFFFF%d|r|cFF888888/%d|r", owned, required)
+        else
+            return string.format("|cFFFF00000|r|cFF888888/%d|r", required)
+        end
+    end
+    
+    -- If we have owned count, show it
+    if owned and owned > 0 then
+        return string.format("|cFFFFFFFF%d|r", owned)
+    end
+    
+    -- Otherwise show insufficient or none
+    local insufficientText = useNone and L(TEXT.NONE_MATERIALS) or L(TEXT.INSUFFICIENT_MATERIALS)
+    return "|cFFFF0000" .. insufficientText .. "|r"
+end
+
 -- Format percentage with color
 function addon.Calculator:FormatPercent(percent)
     if not percent then

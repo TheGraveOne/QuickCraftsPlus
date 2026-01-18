@@ -5,7 +5,7 @@
 local addonName, addon = ...
 
 addon.name = addonName
-addon.version = "v0.1.1"
+addon.version = "v0.1.2"
 
 -- Initialize localization system
 addon.LOCAL:Init()
