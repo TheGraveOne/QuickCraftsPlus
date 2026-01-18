@@ -358,16 +358,34 @@ local function UpdatePigmentDetailView()
                 
                 row.name = row.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 row.name:SetPoint("LEFT", 30, 0)
-                row.name:SetWidth(280)
+                row.name:SetWidth(220)
                 row.name:SetJustifyH("LEFT")
                 
                 row.price = row.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-                row.price:SetPoint("RIGHT", -5, 0)
+                row.price:SetPoint("RIGHT", -60, 0)
                 row.price:SetJustifyH("RIGHT")
 
                 row.profit = row.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 row.profit:SetPoint("RIGHT", row.price, "LEFT", -15, 0)
                 row.profit:SetJustifyH("RIGHT")
+
+                -- Craft button (actions via modifiers)
+                row.craftBtn = CreateFrame("Button", nil, row.frame, "UIPanelButtonTemplate")
+                row.craftBtn:SetSize(50, 20)
+                row.craftBtn:SetPoint("RIGHT", -5, 0)
+                row.craftBtn:SetText("Craft")
+                row.craftBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+
+                row.craftBtn:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+                    GameTooltip:AddLine("Quick Craft", 1, 0.82, 0)
+                    GameTooltip:AddLine("Left-click: Craft 1", 1, 1, 1)
+                    GameTooltip:AddLine("Right-click: Craft X", 1, 1, 1)
+                    GameTooltip:AddLine("Shift-click: Craft Max Profitable", 1, 1, 1)
+                    GameTooltip:AddLine("Ctrl-click: Open Recipe", 1, 1, 1)
+                    GameTooltip:Show()
+                end)
+                row.craftBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
             end
             
             local row = dyeRows[i]
@@ -401,19 +419,87 @@ local function UpdatePigmentDetailView()
                 pigmentCost = data.totalCost
             end
 
+            local outputCount = dye.outputCount or 1
+            local pigmentAmount = dye.pigmentAmount or 1
             if price and pigmentCost then
-                local saleAfterAHCut = price
+                local saleValue = price * outputCount
+                local saleAfterAHCut = saleValue
                 -- If auction house cut is enabled, include in calculation
                 if addon:GetSetting("ahCut") then
-                    saleAfterAHCut = math.floor(price * 0.95)
+                    saleAfterAHCut = math.floor(saleValue * 0.95)
                 end
-                local dyeProfit = saleAfterAHCut - pigmentCost
+                local dyeProfit = saleAfterAHCut - (pigmentCost * pigmentAmount)
                 row.profit:SetText(addon.Calculator:FormatProfit(dyeProfit))
             -- If you do not have an AH price for the pigment
             elseif addon:GetSetting("buyPigments") and not pigmentCost then
                 row.profit:SetText("|cFF888888N/A|r")
             else
                 row.profit:SetText("")
+            end
+
+            -- Wire craft button for this dye
+            if row.craftBtn then
+                local craftSpec = {
+                    recipeID = dye.recipeID,
+                    outputItemID = dye.itemID,
+                    name = dye.name,
+                }
+                row.craftBtn:SetScript("OnClick", function(_, button)
+                    if not addon.Crafting then
+                        print("|cFF00CCFFQuickCrafts|r: Crafting module not loaded.")
+                        return
+                    end
+
+                    -- Ctrl-click: just open/select the recipe
+                    if IsControlKeyDown() then
+                        addon.Crafting:OpenRecipe(craftSpec)
+                        return
+                    end
+
+                    -- Shift-click: craft max profitable (profit > 0 and have pigments)
+                    if IsShiftKeyDown() then
+                        if not price then
+                            print("|cFF00CCFFQuickCrafts|r: Missing dye price. Click Refresh and try again.")
+                            return
+                        end
+
+                        local pigmentCostForCalc = pigmentCost
+                        if addon:GetSetting("buyPigments") and not pigmentCostForCalc then
+                            print("|cFF00CCFFQuickCrafts|r: Missing pigment price. Click Refresh and try again.")
+                            return
+                        end
+
+                        local saleValue = price * outputCount
+                        local saleAfterAHCut = saleValue
+                        if addon:GetSetting("ahCut") then
+                            saleAfterAHCut = math.floor(saleValue * 0.95)
+                        end
+                        local dyeProfit = saleAfterAHCut - ((pigmentCostForCalc or 0) * pigmentAmount)
+                        if dyeProfit <= 0 then
+                            print("|cFF00CCFFQuickCrafts|r: Not profitable right now.")
+                            return
+                        end
+
+                        local ownedPigments = GetItemCount(pigment.itemID, true) or 0
+                        local maxCraftable = math.floor(ownedPigments / pigmentAmount)
+                        if maxCraftable < 1 then
+                            print("|cFF00CCFFQuickCrafts|r: You don't have the pigments for this craft.")
+                            return
+                        end
+
+                        addon.Crafting:Craft(craftSpec, maxCraftable)
+                        return
+                    end
+
+                    -- Right-click: prompt Craft X
+                    if button == "RightButton" then
+                        addon.Crafting:PromptCraftX(craftSpec)
+                        return
+                    end
+
+                    -- Default: craft 1
+                    addon.Crafting:Craft(craftSpec, 1)
+                end)
             end
 
             

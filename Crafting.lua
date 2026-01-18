@@ -1,7 +1,13 @@
 --============================================================================
 -- QuickCrafts: Crafting.lua
--- Lightweight crafting helpers (Retail) for selecting/crafting recipes.
--- Designed to be "best effort" and safe: user should open the profession UI.
+-- Profession-agnostic crafting helpers (Retail) for selecting/crafting recipes.
+--
+-- Design goals:
+--  * Best-effort + safe: user should open the relevant profession/crafting UI.
+--  * Works for ANY recipe type available via C_TradeSkillUI (Alchemy, Inscription,
+--    player housing dyes, etc.)
+--  * Accepts either a recipeID directly OR can resolve a recipeID by output itemID
+--    (and optionally name) from the currently open profession.
 --============================================================================
 
 local addonName, addon = ...
@@ -17,7 +23,6 @@ local function isTradeSkillReady()
     if C_TradeSkillUI.IsTradeSkillReady then
         return C_TradeSkillUI.IsTradeSkillReady()
     end
-    -- Fallback: if API doesn't exist, assume not ready
     return false
 end
 
@@ -35,45 +40,11 @@ local function getItemIDFromLink(link)
     return nil
 end
 
-function addon.Crafting:FindTradeSkillRecipeID(recipe)
-    if not self:IsAvailable() then return nil end
-    if not recipe or not recipe.name then return nil end
+-- Cache outputItemID -> recipeID for the currently open profession.
+addon.Crafting._outputToRecipeID = addon.Crafting._outputToRecipeID or {}
 
-    local all = C_TradeSkillUI.GetAllRecipeIDs()
-    if not all then return nil end
-
-    local targetName = recipe.name
-    local targetItemID = recipe.product and recipe.product.itemID or nil
-
-    local nameMatches = {}
-    for _, recipeID in ipairs(all) do
-        local info = C_TradeSkillUI.GetRecipeInfo(recipeID)
-        if info and info.name == targetName then
-            table.insert(nameMatches, recipeID)
-        end
-    end
-
-    if #nameMatches == 0 then
-        return nil
-    end
-    if #nameMatches == 1 or not targetItemID then
-        return nameMatches[1]
-    end
-
-    -- If multiple recipes share the same name, try to match output itemID.
-    for _, recipeID in ipairs(nameMatches) do
-        if C_TradeSkillUI.GetRecipeOutputItemData then
-            local out = C_TradeSkillUI.GetRecipeOutputItemData(recipeID)
-            if out and out.hyperlink then
-                local outItemID = getItemIDFromLink(out.hyperlink)
-                if outItemID == targetItemID then
-                    return recipeID
-                end
-            end
-        end
-    end
-
-    return nameMatches[1]
+function addon.Crafting:ClearCache()
+    wipe(self._outputToRecipeID)
 end
 
 function addon.Crafting:EnsureReadyOrWarn()
@@ -82,46 +53,120 @@ function addon.Crafting:EnsureReadyOrWarn()
         return false
     end
     if not isTradeSkillReady() then
-        qcPrint("Open your profession window first (e.g., Alchemy), then try again.")
+        qcPrint("Open the relevant profession/crafting window first, then try again.")
         return false
     end
     return true
 end
 
-function addon.Crafting:OpenRecipe(recipe)
-    if not self:EnsureReadyOrWarn() then return false end
-
-    local recipeID = self:FindTradeSkillRecipeID(recipe)
-    if not recipeID then
-        qcPrint("Couldn't find recipe in the currently open profession: " .. (recipe and recipe.name or "(unknown)"))
-        return false
-    end
-
+function addon.Crafting:SelectRecipeID(recipeID)
+    if not recipeID then return false end
     if C_TradeSkillUI.SetRecipeID then
         C_TradeSkillUI.SetRecipeID(recipeID)
-    elseif TradeSkillFrame and TradeSkillFrame.RecipeList and TradeSkillFrame.RecipeList.SelectRecipe then
-        -- Fallback (older UI): best effort
+        return true
+    end
+    if TradeSkillFrame and TradeSkillFrame.RecipeList and TradeSkillFrame.RecipeList.SelectRecipe then
         pcall(function() TradeSkillFrame.RecipeList:SelectRecipe(recipeID) end)
+        return true
+    end
+    return false
+end
+
+-- Best-effort: resolve a recipeID in the CURRENTLY OPEN profession by output itemID.
+function addon.Crafting:FindRecipeIDByOutputItemID(outputItemID)
+    if not self:IsAvailable() then return nil end
+    outputItemID = tonumber(outputItemID)
+    if not outputItemID then return nil end
+
+    if self._outputToRecipeID[outputItemID] then
+        return self._outputToRecipeID[outputItemID]
     end
 
+    if not C_TradeSkillUI.GetRecipeOutputItemData then
+        return nil
+    end
+
+    local all = C_TradeSkillUI.GetAllRecipeIDs()
+    if not all then return nil end
+
+    for _, recipeID in ipairs(all) do
+        local out = C_TradeSkillUI.GetRecipeOutputItemData(recipeID)
+        if out and out.hyperlink then
+            local outItemID = getItemIDFromLink(out.hyperlink)
+            if outItemID == outputItemID then
+                self._outputToRecipeID[outputItemID] = recipeID
+                return recipeID
+            end
+        end
+    end
+
+    return nil
+end
+
+-- Resolve recipeID from a "recipe spec".
+-- Supported shapes:
+--  * { recipeID = 123 }
+--  * { outputItemID = 12345 }
+--  * QuickCrafts recipe tables: { name=..., product={itemID=...}, ... }
+function addon.Crafting:ResolveRecipeID(spec)
+    if type(spec) ~= "table" then return nil end
+
+    if spec.recipeID then
+        return spec.recipeID
+    end
+
+    -- Prefer explicit outputItemID when present
+    local outputItemID = spec.outputItemID
+    if not outputItemID and spec.product and spec.product.itemID then
+        outputItemID = spec.product.itemID
+    end
+    if outputItemID then
+        local rid = self:FindRecipeIDByOutputItemID(outputItemID)
+        if rid then return rid end
+    end
+
+    -- Fallback: match by name within the currently open profession.
+    if spec.name then
+        local all = C_TradeSkillUI.GetAllRecipeIDs()
+        if all then
+            for _, recipeID in ipairs(all) do
+                local info = C_TradeSkillUI.GetRecipeInfo(recipeID)
+                if info and info.name == spec.name then
+                    return recipeID
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+function addon.Crafting:OpenRecipe(spec)
+    if not self:EnsureReadyOrWarn() then return false end
+
+    local recipeID = self:ResolveRecipeID(spec)
+    if not recipeID then
+        qcPrint("Couldn't find that recipe in the currently open profession window.")
+        return false
+    end
+
+    self:SelectRecipeID(recipeID)
     return true
 end
 
-function addon.Crafting:Craft(recipe, quantity)
+function addon.Crafting:Craft(spec, quantity)
     if not self:EnsureReadyOrWarn() then return false end
     quantity = tonumber(quantity) or 1
     if quantity < 1 then quantity = 1 end
 
-    local recipeID = self:FindTradeSkillRecipeID(recipe)
+    local recipeID = self:ResolveRecipeID(spec)
     if not recipeID then
-        qcPrint("Couldn't find recipe in the currently open profession: " .. (recipe and recipe.name or "(unknown)"))
+        qcPrint("Couldn't find that recipe in the currently open profession window.")
         return false
     end
 
     -- Select first so the player sees what's being crafted.
-    if C_TradeSkillUI.SetRecipeID then
-        C_TradeSkillUI.SetRecipeID(recipeID)
-    end
+    self:SelectRecipeID(recipeID)
 
     local ok, err = pcall(function()
         C_TradeSkillUI.CraftRecipe(recipeID, quantity)
@@ -137,7 +182,7 @@ end
 -- Craft X popup
 --============================================================================
 
-addon.Crafting._pendingRecipe = nil
+addon.Crafting._pendingSpec = nil
 
 if not StaticPopupDialogs then
     return
@@ -156,14 +201,14 @@ StaticPopupDialogs["QUICKCRAFTS_CRAFT_X"] = {
     end,
     OnAccept = function(self)
         local qty = tonumber(self.editBox:GetText())
-        local recipe = addon.Crafting._pendingRecipe
-        addon.Crafting._pendingRecipe = nil
-        if recipe and qty and qty > 0 then
-            addon.Crafting:Craft(recipe, math.floor(qty))
+        local spec = addon.Crafting._pendingSpec
+        addon.Crafting._pendingSpec = nil
+        if spec and qty and qty > 0 then
+            addon.Crafting:Craft(spec, math.floor(qty))
         end
     end,
     OnCancel = function()
-        addon.Crafting._pendingRecipe = nil
+        addon.Crafting._pendingSpec = nil
     end,
     timeout = 0,
     whileDead = true,
@@ -171,7 +216,7 @@ StaticPopupDialogs["QUICKCRAFTS_CRAFT_X"] = {
     preferredIndex = 3,
 }
 
-function addon.Crafting:PromptCraftX(recipe)
-    self._pendingRecipe = recipe
+function addon.Crafting:PromptCraftX(spec)
+    self._pendingSpec = spec
     StaticPopup_Show("QUICKCRAFTS_CRAFT_X")
 end
