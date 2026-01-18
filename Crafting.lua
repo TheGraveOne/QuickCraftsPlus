@@ -115,8 +115,12 @@ function addon.Crafting:ResolveRecipeID(spec)
         return spec.recipeID
     end
 
-    -- Prefer explicit outputItemID when present
-    local outputItemID = spec.outputItemID
+    -- Prefer explicit outputItemID when present.
+    -- Support multiple table shapes used across the addon:
+    --  * Transmutes recipes: { product = { itemID = ... } }
+    --  * Dyes entries:       { itemID = ... }
+    --  * Generic:            { outputItemID = ... }
+    local outputItemID = spec.outputItemID or spec.itemID
     if not outputItemID and spec.product and spec.product.itemID then
         outputItemID = spec.product.itemID
     end
