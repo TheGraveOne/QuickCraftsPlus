@@ -1,10 +1,10 @@
 ## Interface: 110207
-## Title: QuickCraftsPlus
-## Notes: Quick crafting + profit tools using Auctionator prices. Type /calc to open.
-## Author: Penguinr2gt + TheGraveOne
-## Version: v0.1.1
+## Title: QuickCrafts
+## Notes: Calculates various crafting profits using Auctionator prices. Type /calc to open.
+## Author: Penguinr2gt
+## Version: 0.0.3
 ## Dependencies: Auctionator
-## SavedVariables: QuickCraftsPlusDB
+## SavedVariables: QuickCraftsDB
 
 # Constants
 Constants.lua

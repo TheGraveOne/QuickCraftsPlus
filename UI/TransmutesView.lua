@@ -78,7 +78,7 @@ headerSell:SetPoint("LEFT", 290, 0)
 headerSell:SetText("|cFFAAAACC" .. L(TEXT.HEADER_SELL) .. "|r")
 
 local headerProfit = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-headerProfit:SetPoint("LEFT", 380, 0)
+headerProfit:SetPoint("LEFT", 360, 0)
 headerProfit:SetText("|cFFAAAACC" .. L(TEXT.HEADER_PROFIT) .. "|r")
 
 local headerSep = TransmutesFrame:CreateTexture(nil, "ARTWORK")
@@ -128,10 +128,80 @@ local function CreateRecipeRow(index, recipe)
     
     -- Profit
     row.profitText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.profitText:SetPoint("LEFT", 380, 0)
-    row.profitText:SetWidth(70)
+    row.profitText:SetPoint("LEFT", 360, 0)
+    row.profitText:SetWidth(65)
     row.profitText:SetJustifyH("LEFT")
     row.profitText:SetText("...")
+
+    -- Craft button (actions via modifiers)
+    row.craftBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.craftBtn:SetSize(50, 22)
+    row.craftBtn:SetPoint("RIGHT", -10, 0)
+    row.craftBtn:SetText("Craft")
+    row.craftBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+
+    row.craftBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:AddLine("Quick Craft", 1, 0.82, 0)
+        GameTooltip:AddLine("Left-click: Craft 1", 1, 1, 1)
+        GameTooltip:AddLine("Right-click: Craft X", 1, 1, 1)
+        GameTooltip:AddLine("Shift-click: Craft Max Profitable", 1, 1, 1)
+        GameTooltip:AddLine("Ctrl-click: Open Recipe", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    row.craftBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    row.craftBtn:SetScript("OnClick", function(_, button)
+        if not addon.Crafting then
+            print("|cFF00CCFFQuickCrafts|r: Crafting module not loaded.")
+            return
+        end
+
+        -- Ctrl-click: just open/select the recipe
+        if IsControlKeyDown() then
+            addon.Crafting:OpenRecipe(recipe)
+            return
+        end
+
+        -- Shift-click: craft max profitable (profit > 0 and have mats)
+        if IsShiftKeyDown() then
+            local data = addon.calculatedData and addon.calculatedData[recipe.id]
+            if not data or not data.hasAllPrices or not data.productPrice then
+                print("|cFF00CCFFQuickCrafts|r: Missing price data. Click Refresh and try again.")
+                return
+            end
+            if (data.profit or 0) <= 0 then
+                print("|cFF00CCFFQuickCrafts|r: Not profitable right now.")
+                return
+            end
+
+            local maxCraftable = math.huge
+            for _, mat in ipairs(recipe.materials or {}) do
+                local owned = GetItemCount(mat.itemID, true) or 0
+                local possible = math.floor(owned / (mat.amount or 1))
+                if possible < maxCraftable then
+                    maxCraftable = possible
+                end
+            end
+            if maxCraftable == math.huge then maxCraftable = 0 end
+            if maxCraftable < 1 then
+                print("|cFF00CCFFQuickCrafts|r: You don't have the materials for this craft.")
+                return
+            end
+
+            addon.Crafting:Craft(recipe, maxCraftable)
+            return
+        end
+
+        -- Right-click: prompt Craft X
+        if button == "RightButton" then
+            addon.Crafting:PromptCraftX(recipe)
+            return
+        end
+
+        -- Default: craft 1
+        addon.Crafting:Craft(recipe, 1)
+    end)
     
     -- Click to view details
     row:SetScript("OnClick", function()
